@@ -120,6 +120,13 @@ def add_transaction(date, item_type, item_name, department, quantity, vendor_nam
     save_ledger(st.session_state.ledger)
     save_overview(st.session_state.inventory)
 
+def delete_inventory_file():
+    if os.path.exists(FILE_NAME):
+        os.remove(FILE_NAME)
+        st.success(f"Deleted {FILE_NAME}")
+    else:
+        st.error(f"{FILE_NAME} does not exist")
+
 # Sidebar
 st.sidebar.title("Navigation")
 if st.sidebar.button("Overview"):
@@ -132,6 +139,10 @@ if st.sidebar.button("Issue Items"):
     st.session_state.page = "Issue Items"
 if st.sidebar.button("Manage Departments"):
     st.session_state.page = "Manage Departments"
+if st.sidebar.button("Delete Inventory File"):
+    st.session_state.page = "Delete Inventory File"
+if st.sidebar.button("Download Inventory File"):
+    st.session_state.page = "Download Inventory File"
 
 # Streamlit app
 st.title('School Housekeeping Inventory Management')
@@ -203,3 +214,22 @@ elif st.session_state.page == "Manage Departments":
             st.success(f"Department '{remove_dept}' removed.")
         else:
             st.warning(f"Department '{remove_dept}' does not exist.")
+
+elif st.session_state.page == "Delete Inventory File":
+    st.header('Delete Inventory File')
+    st.warning("This action will delete the Inventory.xlsx file permanently.")
+    if st.button("Delete File"):
+        delete_inventory_file()
+
+elif st.session_state.page == "Download Inventory File":
+    st.header('Download Inventory File')
+    if os.path.exists(FILE_NAME):
+        with open(FILE_NAME, "rb") as file:
+            btn = st.download_button(
+                label="Download Inventory.xlsx",
+                data=file,
+                file_name="Inventory.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+    else:
+        st.error(f"{FILE_NAME} does not exist")
