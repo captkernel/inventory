@@ -17,9 +17,25 @@ def load_ledger():
                 'Date', 'Type', 'Item Name', 'Department', 'Quantity Issued', 'Current Stock', 'Vendor Name', 'Invoice Number'
             ])
     else:
+        # Initialize session state for data persistence
+        if 'ledger' not in st.session_state:
+            st.session_state.ledger = load_ledger()
+        if 'inventory' not in st.session_state:
+            st.session_state.inventory = load_overview()
+        if 'departments' not in st.session_state:
+            st.session_state.departments = ['Sports', 'Boys Hostel', 'Canteen', 'Girls Hostel', 'Personal']
+        
+        # Initialize data from files
+        if 'ledger_initialized' not in st.session_state:
+            st.session_state.ledger = load_ledger()
+            st.session_state.ledger_initialized = True
+        if 'inventory_initialized' not in st.session_state:
+            st.session_state.inventory = load_overview()
+            st.session_state.inventory_initialized = True
         return pd.DataFrame(columns=[
             'Date', 'Type', 'Item Name', 'Department', 'Quantity Issued', 'Current Stock', 'Vendor Name', 'Invoice Number'
         ])
+        
 
 # Load the overview (inventory) from the Excel file
 def load_overview():
@@ -29,6 +45,21 @@ def load_overview():
         except ValueError:
             return pd.DataFrame(columns=['Item Name', 'Type', 'Total', 'Admin'] + st.session_state.departments)
     else:
+        # Initialize session state for data persistence
+        if 'ledger' not in st.session_state:
+            st.session_state.ledger = load_ledger()
+        if 'inventory' not in st.session_state:
+            st.session_state.inventory = load_overview()
+        if 'departments' not in st.session_state:
+            st.session_state.departments = ['Sports', 'Boys Hostel', 'Canteen', 'Girls Hostel', 'Personal']
+        
+        # Initialize data from files
+        if 'ledger_initialized' not in st.session_state:
+            st.session_state.ledger = load_ledger()
+            st.session_state.ledger_initialized = True
+        if 'inventory_initialized' not in st.session_state:
+            st.session_state.inventory = load_overview()
+            st.session_state.inventory_initialized = True
         return pd.DataFrame(columns=['Item Name', 'Type', 'Total', 'Admin'] + st.session_state.departments)
 
 # Save the ledger to the Excel file
