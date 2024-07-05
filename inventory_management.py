@@ -7,6 +7,14 @@ import os
 FILE_NAME = 'Inventory.xlsx'
 LEDGER_SHEET = 'Ledger'
 OVERVIEW_SHEET = 'Overview'
+DEFAULT_DEPARTMENTS = ['Junior block', 'Middle block', 'Senior block', 'Sports', 
+    'Arts', 'Boys hostel', 'Girls hostel', 'Owner'
+]
+ASSET_TYPES = [
+    'Housekeeping assets', 'Housekeeping consumables', 'Electrical equipment', 
+    'Hardware', 'Gardening equipment', 'Stationary', 
+    'Furnitures and fixtures', 'Sports equipment'
+]
 
 # Initialize session state for data persistence
 if 'ledger' not in st.session_state:
@@ -14,9 +22,9 @@ if 'ledger' not in st.session_state:
         'Date', 'Type', 'Item Name', 'Department', 'Quantity Issued', 'Current Stock', 'Vendor Name', 'Invoice Number'
     ])
 if 'inventory' not in st.session_state:
-    st.session_state.inventory = pd.DataFrame(columns=['Item Name', 'Type', 'Total', 'Admin', 'Sports', 'Boys Hostel', 'Canteen', 'Girls Hostel', 'Personal'])
+    st.session_state.inventory = pd.DataFrame(columns=['Item Name', 'Type', 'Total', 'Admin'] + DEFAULT_DEPARTMENTS)
 if 'departments' not in st.session_state:
-    st.session_state.departments = ['Sports', 'Boys Hostel', 'Canteen', 'Girls Hostel', 'Personal']
+    st.session_state.departments = DEFAULT_DEPARTMENTS
 if 'page' not in st.session_state:
     st.session_state.page = 'Overview'
 
@@ -38,10 +46,16 @@ def load_ledger():
 def load_overview():
     if os.path.exists(FILE_NAME):
         try:
-            return pd.read_excel(FILE_NAME, sheet_name=OVERVIEW_SHEET, engine='openpyxl')
+            df = pd.read_excel(FILE_NAME, sheet_name=OVERVIEW_SHEET, engine='openpyxl')
+            # Extract departments from the columns, excluding non-department columns
+            department_cols = [col for col in df.columns if col not in ['Item Name', 'Type', 'Total', 'Admin']]
+            st.session_state.departments = department_cols if department_cols else DEFAULT_DEPARTMENTS
+            return df
         except ValueError:
+            st.session_state.departments = DEFAULT_DEPARTMENTS
             return pd.DataFrame(columns=['Item Name', 'Type', 'Total', 'Admin'] + st.session_state.departments)
     else:
+        st.session_state.departments = DEFAULT_DEPARTMENTS
         return pd.DataFrame(columns=['Item Name', 'Type', 'Total', 'Admin'] + st.session_state.departments)
 
 # Save the ledger to the Excel file
@@ -124,6 +138,12 @@ def delete_inventory_file():
     if os.path.exists(FILE_NAME):
         os.remove(FILE_NAME)
         st.success(f"Deleted {FILE_NAME}")
+        # Clear session state and reinitialize
+        st.session_state.ledger = pd.DataFrame(columns=[
+            'Date', 'Type', 'Item Name', 'Department', 'Quantity Issued', 'Current Stock', 'Vendor Name', 'Invoice Number'
+        ])
+        st.session_state.inventory = pd.DataFrame(columns=['Item Name', 'Type', 'Total', 'Admin'] + DEFAULT_DEPARTMENTS)
+        st.session_state.departments = DEFAULT_DEPARTMENTS
     else:
         st.error(f"{FILE_NAME} does not exist")
 
@@ -145,7 +165,7 @@ if st.sidebar.button("Download Inventory File"):
     st.session_state.page = "Download Inventory File"
 
 # Streamlit app
-st.title('School Housekeeping Inventory Management')
+st.title('School Inventory Management')
 
 if st.session_state.page == "Overview":
     st.header('Inventory Overview')
@@ -160,7 +180,7 @@ elif st.session_state.page == "Add Stock":
     st.header('Add New Stock')
     with st.form("add_stock_form"):
         date = st.date_input("Date")
-        item_type = st.selectbox("Item Type", ["Asset", "Consumable"])
+        item_type = st.selectbox("Item Type", ASSET_TYPES)
         item_name = st.text_input("Item Name")
         quantity = st.number_input("Quantity", min_value=1, step=1)
         vendor_name = st.text_input("Vendor Name")
@@ -174,7 +194,7 @@ elif st.session_state.page == "Add Stock":
 elif st.session_state.page == "Issue Items":
     st.header('Issue Items to Departments')
     
-    item_type = st.selectbox("Item Type", ["Asset", "Consumable"])
+    item_type = st.selectbox("Item Type", ASSET_TYPES)
     item_names = st.session_state.inventory[st.session_state.inventory['Type'] == item_type]['Item Name'].unique()
     
     with st.form("issue_items_form"):
