@@ -148,7 +148,7 @@ def add_transaction(date, item_type, item_name, department, quantity, vendor_nam
         'Current Stock': current_stock - quantity if department != 'Admin' else current_stock + quantity,
         'Vendor Name': vendor_name,
         'Invoice Number': str(invoice_number),
-        'Total Price': round(total_price,2)
+        'Total Price': round(total_price, 2) if total_price is not None else None
     }
     st.session_state.ledger = pd.concat([st.session_state.ledger, pd.DataFrame([new_entry])], ignore_index=True)
     st.session_state.inventory = update_inventory(st.session_state.ledger)
