@@ -21,6 +21,7 @@ st.markdown(
 FILE_NAME = 'Inventory.xlsx'
 LEDGER_SHEET = 'Ledger'
 OVERVIEW_SHEET = 'Overview'
+MODIFICATION_SHEET = 'Modifications'
 DEFAULT_DEPARTMENTS = [
     'Junior block', 'Middle block', 'Senior block', 'Sports', 
     'Arts', 'Boys hostel', 'Girls hostel', 'Owner'
@@ -38,7 +39,11 @@ if 'ledger' not in st.session_state:
         'Vendor Name', 'Invoice Number', 'Total Price'
     ])
 if 'inventory' not in st.session_state:
-    st.session_state.inventory = pd.DataFrame(columns=['Item Name', 'Type', 'Total', 'Admin'] + DEFAULT_DEPARTMENTS)
+    st.session_state.inventory = pd.DataFrame(columns=['Item Name', 'Type', 'Total', 'Admin'] + DEFAULT_DEPARTMENTS + ['Broken/Lost'])
+if 'modifications' not in st.session_state:
+    st.session_state.modifications = pd.DataFrame(columns=[
+        'Date', 'Type', 'Item Name', 'Department', 'Quantity', 'Action'
+    ])
 if 'departments' not in st.session_state:
     st.session_state.departments = DEFAULT_DEPARTMENTS
 if 'asset_types' not in st.session_state:
@@ -68,15 +73,29 @@ def load_overview():
         try:
             df = pd.read_excel(FILE_NAME, sheet_name=OVERVIEW_SHEET, engine='openpyxl')
             # Extract departments from the columns, excluding non-department columns
-            department_cols = [col for col in df.columns if col not in ['Item Name', 'Type', 'Total', 'Admin']]
+            department_cols = [col for col in df.columns if col not in ['Item Name', 'Type', 'Total', 'Admin', 'Broken/Lost']]
             st.session_state.departments = department_cols if department_cols else DEFAULT_DEPARTMENTS
             return df
         except ValueError:
             st.session_state.departments = DEFAULT_DEPARTMENTS
-            return pd.DataFrame(columns=['Item Name', 'Type', 'Total', 'Admin'] + st.session_state.departments)
+            return pd.DataFrame(columns=['Item Name', 'Type', 'Total', 'Admin'] + st.session_state.departments + ['Broken/Lost'])
     else:
         st.session_state.departments = DEFAULT_DEPARTMENTS
-        return pd.DataFrame(columns=['Item Name', 'Type', 'Total', 'Admin'] + st.session_state.departments)
+        return pd.DataFrame(columns=['Item Name', 'Type', 'Total', 'Admin'] + st.session_state.departments + ['Broken/Lost'])
+
+# Load the modifications from the Excel file
+def load_modifications():
+    if os.path.exists(FILE_NAME):
+        try:
+            return pd.read_excel(FILE_NAME, sheet_name=MODIFICATION_SHEET, engine='openpyxl')
+        except ValueError:
+            return pd.DataFrame(columns=[
+                'Date', 'Type', 'Item Name', 'Department', 'Quantity', 'Action'
+            ])
+    else:
+        return pd.DataFrame(columns=[
+            'Date', 'Type', 'Item Name', 'Department', 'Quantity', 'Action'
+        ])
 
 # Save the ledger to the Excel file
 def save_ledger(ledger_df):
@@ -96,6 +115,15 @@ def save_overview(overview_df):
         with pd.ExcelWriter(FILE_NAME, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
             overview_df.to_excel(writer, sheet_name=OVERVIEW_SHEET, index=False)
 
+# Save the modifications to the Excel file
+def save_modifications(modifications_df):
+    if not os.path.exists(FILE_NAME):
+        with pd.ExcelWriter(FILE_NAME, engine='openpyxl', mode='w') as writer:
+            modifications_df.to_excel(writer, sheet_name=MODIFICATION_SHEET, index=False)
+    else:
+        with pd.ExcelWriter(FILE_NAME, engine='openpyxl', mode='a', if_sheet_exists='replace') as writer:
+            modifications_df.to_excel(writer, sheet_name=MODIFICATION_SHEET, index=False)
+
 # Initialize data from files
 if 'ledger_initialized' not in st.session_state:
     st.session_state.ledger = load_ledger()
@@ -103,13 +131,16 @@ if 'ledger_initialized' not in st.session_state:
 if 'inventory_initialized' not in st.session_state:
     st.session_state.inventory = load_overview()
     st.session_state.inventory_initialized = True
+if 'modifications_initialized' not in st.session_state:
+    st.session_state.modifications = load_modifications()
+    st.session_state.modifications_initialized = True
 
 # Helper functions
 def update_inventory(ledger_df):
-    inventory = pd.DataFrame(columns=['Item Name', 'Type', 'Total', 'Admin'] + st.session_state.departments)
+    inventory = pd.DataFrame(columns=['Item Name', 'Type', 'Total', 'Admin'] + st.session_state.departments + ['Broken/Lost'])
     for index, row in ledger_df.iterrows():
         if row['Item Name'] not in inventory['Item Name'].values:
-            new_row = {'Item Name': row['Item Name'], 'Type': row['Type'], 'Total': 0, 'Admin': 0}
+            new_row = {'Item Name': row['Item Name'], 'Type': row['Type'], 'Total': 0, 'Admin': 0, 'Broken/Lost': 0}
             for dept in st.session_state.departments:
                 new_row[dept] = 0
             inventory = pd.concat([inventory, pd.DataFrame([new_row])], ignore_index=True)
@@ -118,17 +149,19 @@ def update_inventory(ledger_df):
         
         if row['Department'] == 'Admin':
             inventory.at[item_row, 'Admin'] += row['Quantity Issued']
+        elif row['Department'] == 'Broken/Lost':
+            inventory.at[item_row, 'Broken/Lost'] += row['Quantity Issued']
         elif row['Department'] in st.session_state.departments:
             inventory.at[item_row, row['Department']] += row['Quantity Issued']
             inventory.at[item_row, 'Admin'] -= row['Quantity Issued']
         
-        inventory.at[item_row, 'Total'] = inventory.at[item_row, 'Admin'] + sum(inventory.loc[item_row, st.session_state.departments])
+        inventory.at[item_row, 'Total'] = sum(inventory.loc[item_row, st.session_state.departments]) + inventory.at[item_row, 'Admin']
     
     return inventory
 
 def add_transaction(date, item_type, item_name, department, quantity, vendor_name, invoice_number, total_price):
     if item_name not in st.session_state.inventory['Item Name'].values:
-        new_row = {'Item Name': item_name, 'Type': item_type, 'Total': 0, 'Admin': 0}
+        new_row = {'Item Name': item_name, 'Type': item_type, 'Total': 0, 'Admin': 0, 'Broken/Lost': 0}
         for dept in st.session_state.departments:
             new_row[dept] = 0
         st.session_state.inventory = pd.concat([st.session_state.inventory, pd.DataFrame([new_row])], ignore_index=True)
@@ -155,6 +188,41 @@ def add_transaction(date, item_type, item_name, department, quantity, vendor_nam
     save_ledger(st.session_state.ledger)
     save_overview(st.session_state.inventory)
 
+def modify_inventory(date, item_type, item_name, department, quantity, action):
+    if item_name not in st.session_state.inventory['Item Name'].values:
+        st.error(f"{item_name} does not exist in the inventory.")
+        return
+
+    item_index = st.session_state.inventory[st.session_state.inventory['Item Name'] == item_name].index[0]
+    current_stock = st.session_state.inventory.loc[item_index, department]
+    
+    if action == "Mark as Broken" and quantity > current_stock:
+        st.error(f"Not enough {item_name} in {department} to mark as broken. Available: {current_stock}")
+        return
+
+    if action == "Return to Admin":
+        if quantity > current_stock:
+            st.error(f"Not enough {item_name} in {department} to return. Available: {current_stock}")
+            return
+        st.session_state.inventory.at[item_index, department] -= quantity
+        st.session_state.inventory.at[item_index, 'Admin'] += quantity
+    elif action == "Mark as Broken":
+        st.session_state.inventory.at[item_index, department] -= quantity
+        st.session_state.inventory.at[item_index, 'Broken/Lost'] += quantity
+    
+    new_entry = {
+        'Date': date,
+        'Type': item_type,
+        'Item Name': item_name,
+        'Department': department,
+        'Quantity': quantity,
+        'Action': action
+    }
+    
+    st.session_state.modifications = pd.concat([st.session_state.modifications, pd.DataFrame([new_entry])], ignore_index=True)
+    save_modifications(st.session_state.modifications)
+    save_overview(st.session_state.inventory)
+
 def delete_inventory_file():
     if os.path.exists(FILE_NAME):
         os.remove(FILE_NAME)
@@ -164,7 +232,10 @@ def delete_inventory_file():
             'Date', 'Type', 'Item Name', 'Department', 'Quantity Issued', 'Current Stock', 
             'Vendor Name', 'Invoice Number', 'Total Price'
         ])
-        st.session_state.inventory = pd.DataFrame(columns=['Item Name', 'Type', 'Total', 'Admin'] + DEFAULT_DEPARTMENTS)
+        st.session_state.inventory = pd.DataFrame(columns=['Item Name', 'Type', 'Total', 'Admin'] + DEFAULT_DEPARTMENTS + ['Broken/Lost'])
+        st.session_state.modifications = pd.DataFrame(columns=[
+            'Date', 'Type', 'Item Name', 'Department', 'Quantity', 'Action'
+        ])
         st.session_state.departments = DEFAULT_DEPARTMENTS
         st.session_state.asset_types = DEFAULT_ASSET_TYPES
     else:
@@ -184,6 +255,8 @@ if st.sidebar.button("Manage Departments"):
     st.session_state.page = "Manage Departments"
 if st.sidebar.button("Manage Item Types"):
     st.session_state.page = "Manage Item Types"
+if st.sidebar.button("Inventory Modification"):
+    st.session_state.page = "Inventory Modification"
 if st.sidebar.button("Delete Inventory File"):
     st.session_state.page = "Delete Inventory File"
 if st.sidebar.button("Download Inventory File"):
@@ -197,6 +270,10 @@ if st.session_state.page == "Overview":
     inventory = st.session_state.inventory.copy()
     st.dataframe(inventory.style.set_properties(**{'width': 'auto'}))
     
+    st.header('Modification Records')
+    modifications = st.session_state.modifications.copy()
+    st.dataframe(modifications.style.set_properties(**{'width': 'auto'}))
+
 elif st.session_state.page == "Ledger":
     st.header('Transaction Ledger')
     st.dataframe(st.session_state.ledger.style.set_properties(**{'width': 'auto'}))
@@ -300,6 +377,30 @@ elif st.session_state.page == "Manage Item Types":
                 st.success(f"Item Type '{remove_type}' removed.")
             else:
                 st.warning(f"Item Type '{remove_type}' does not exist.")
+
+elif st.session_state.page == "Inventory Modification":
+    st.header('Inventory Modification')
+    item_type = st.selectbox("Item Type", st.session_state.asset_types)
+    item_names = st.session_state.inventory[st.session_state.inventory['Type'] == item_type]['Item Name'].unique()
+    
+    with st.form("modify_inventory_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            date = st.date_input("Date")
+            item_name = st.selectbox("Item Name", item_names)
+            action = st.selectbox("Action", ["Mark as Broken", "Return to Admin"])
+        with col2:
+            department = st.selectbox("Department", st.session_state.departments)
+            quantity = st.number_input("Quantity", min_value=1, step=1)
+        
+        submitted = st.form_submit_button("Modify Inventory")
+        
+        if submitted:
+            modify_inventory(date.strftime("%Y-%m-%d"), item_type, item_name, department, quantity, action)
+            if action == "Mark as Broken":
+                st.success(f"Marked {quantity} units of {item_name} from {department} as broken")
+            elif action == "Return to Admin":
+                st.success(f"Returned {quantity} units of {item_name} from {department} to Admin")
 
 elif st.session_state.page == "Delete Inventory File":
     st.header('Delete Inventory File')
